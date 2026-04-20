@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trends Engineering · Complete Management System</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --bg: #0d1117;
@@ -149,24 +148,6 @@ tr:hover { background: var(--sf2); }
 .sig-box { border-top: 1px solid #000; padding-top: 4px; }
 .sig-signed { background: #e8f8ec; border: 1px solid #4caf50; border-radius: 4px; padding: 5px 8px; font-size: 8pt; color: #2a7a3a; }
 
-/* RATES AUTOCOMPLETE */
-.ac-wrap { position: relative; }
-.ac-input { width: 100%; border: none; border-bottom: 1px solid #aaa; background: transparent; font-size: 8.5pt; padding: 0 2px; outline: none; }
-.ac-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #bbb; max-height: 200px; overflow-y: auto; z-index: 100; }
-.ac-item { padding: 5px 8px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
-.ac-item:hover { background: #fffce8; }
-.ac-item-rate { color: #0a5c2e; font-weight: 600; }
-
-/* PRINT */
-@media print {
-  .sb, .tb, button, .inb-list, .modal, .btn { display: none !important; }
-  .mc { width: 100%; }
-  .paper { border: none; padding: 10px; }
-}
-
-/* TIMELINE */
-.timeline-item { padding: 0.4rem 0; border-bottom: 1px solid var(--bd); font-size: 0.7rem; }
-
 .loading { text-align: center; padding: 2rem; color: var(--tx3); }
 </style>
 </head>
@@ -180,7 +161,7 @@ tr:hover { background: var(--sf2); }
     <input type="email" id="loginEmail" placeholder="Email" autocomplete="off">
     <input type="password" id="loginPassword" placeholder="Password" autocomplete="off">
     <button id="loginBtn">Login →</button>
-    <div id="loginError" class="error-msg" style="color:var(--rd); font-size:0.7rem; margin-top:0.5rem;"></div>
+    <div id="loginError" style="color:var(--rd); font-size:0.7rem; margin-top:0.5rem;"></div>
     <p style="margin-top:1rem; font-size:0.65rem; color:var(--tx3); text-align:center;">
       Demo: Use any email/password<br>Account auto-created
     </p>
@@ -230,336 +211,344 @@ tr:hover { background: var(--sf2); }
 </div>
 
 <script>
-// ============================================
-// SUPABASE CONFIGURATION
-// ============================================
-const SUPABASE_URL = "https://ucjbcajddwtjrfcndzsb.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjamJjYWpkZHd0anJmY25kenNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTQxODIsImV4cCI6MjA5MjI5MDE4Mn0.4Biihacfmt3iKQPSo2DbO8mpVkuskLN40v6lPYjqZ5Y";
-
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ============================================
-// GLOBAL STATE
-// ============================================
-let currentUser = null;
-let currentProfile = null;
-let currentRole = null;
-let allWorkOrders = [];
-let allRates = [];
-let pendingSignature = null;
-
-// ============================================
-// WAIT FOR PAGE TO LOAD
-// ============================================
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('Page loaded, setting up login button');
-  const loginBtn = document.getElementById('loginBtn');
-  if (loginBtn) {
-    loginBtn.onclick = handleLogin;
-    console.log('Login button attached');
-  } else {
-    console.error('Login button not found!');
-  }
-});
-
-// ============================================
-// AUTHENTICATION
-// ============================================
-async function handleLogin() {
-  console.log("Login clicked!");
-  const email = document.getElementById('loginEmail').value;
-  const password = document.getElementById('loginPassword').value;
-  const errorDiv = document.getElementById('loginError');
-  errorDiv.textContent = '';
+// Load Supabase dynamically to avoid duplicate issues
+(function() {
+  // Supabase credentials
+  const SUPABASE_URL = "https://ucjbcajddwtjrfcndzsb.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjamJjYWpkZHd0anJmY25kenNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTQxODIsImV4cCI6MjA5MjI5MDE4Mn0.4Biihacfmt3iKQPSo2DbO8mpVkuskLN40v6lPYjqZ5Y";
   
-  if (!email || !password) { 
-    errorDiv.textContent = 'Please enter email and password'; 
-    return; 
-  }
-  
-  try {
-    console.log("Attempting login for:", email);
-    let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  let supabase = null;
+  let currentUser = null;
+  let currentProfile = null;
+  let currentRole = null;
+  let allWorkOrders = [];
+  let allRates = [];
+  let pendingSignature = null;
+
+  // Load Supabase script
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+  script.onload = function() {
+    console.log("Supabase loaded");
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log("Supabase client created");
     
-    if (error && error.message.includes('Invalid login credentials')) {
-      console.log("Creating new account...");
-      const { error: signUpError } = await supabase.auth.signUp({ 
-        email, 
-        password, 
-        options: { data: { name: email.split('@')[0] } } 
-      });
-      if (signUpError) { 
-        errorDiv.textContent = 'Signup error: ' + signUpError.message; 
-        return; 
-      }
-      console.log("Account created, signing in...");
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) { 
-        errorDiv.textContent = 'Login error: ' + signInError.message; 
-        return; 
-      }
-      data = signInData;
-    } else if (error) { 
-      errorDiv.textContent = 'Login error: ' + error.message; 
+    // Setup login button after Supabase is loaded
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+      loginBtn.onclick = handleLogin;
+      console.log("Login button attached");
+    }
+  };
+  script.onerror = function() {
+    console.error("Failed to load Supabase");
+    document.getElementById('loginError').innerHTML = 'Failed to load. Please refresh the page.';
+  };
+  document.head.appendChild(script);
+
+  // ============================================
+  // AUTHENTICATION
+  // ============================================
+  async function handleLogin() {
+    console.log("Login clicked!");
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    const errorDiv = document.getElementById('loginError');
+    errorDiv.innerHTML = '';
+    
+    if (!email || !password) { 
+      errorDiv.innerHTML = 'Please enter email and password'; 
       return; 
     }
     
-    currentUser = data.user;
-    console.log("Logged in user:", currentUser.id);
-    await loadUserProfile();
-    await loadRates();
-    await initApp();
-  } catch (error) { 
-    console.error("Login error:", error);
-    errorDiv.textContent = 'Error: ' + error.message; 
+    if (!supabase) {
+      errorDiv.innerHTML = 'System still loading. Please wait...';
+      return;
+    }
+    
+    try {
+      console.log("Attempting login for:", email);
+      let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error && error.message.includes('Invalid login credentials')) {
+        console.log("Creating new account...");
+        const { error: signUpError } = await supabase.auth.signUp({ 
+          email, 
+          password, 
+          options: { data: { name: email.split('@')[0] } } 
+        });
+        if (signUpError) { 
+          errorDiv.innerHTML = 'Signup error: ' + signUpError.message; 
+          return; 
+        }
+        console.log("Account created, signing in...");
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) { 
+          errorDiv.innerHTML = 'Login error: ' + signInError.message; 
+          return; 
+        }
+        data = signInData;
+      } else if (error) { 
+        errorDiv.innerHTML = 'Login error: ' + error.message; 
+        return; 
+      }
+      
+      currentUser = data.user;
+      console.log("Logged in user:", currentUser.id);
+      await loadUserProfile();
+      await loadRates();
+      await initApp();
+    } catch (error) { 
+      console.error("Login error:", error);
+      errorDiv.innerHTML = 'Error: ' + error.message; 
+    }
   }
-}
 
-async function loadUserProfile() {
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
-  if (data) { 
-    currentProfile = data; 
-    currentRole = data.role; 
-  } else {
-    const { data: newProfile, error: insertError } = await supabase.from('profiles').insert({ 
-      id: currentUser.id, 
-      name: currentUser.email?.split('@')[0] || 'User', 
-      role: 'team' 
-    }).select().single();
-    currentProfile = newProfile || { id: currentUser.id, name: 'User', role: 'team' };
-    currentRole = 'team';
+  async function loadUserProfile() {
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
+    if (data) { 
+      currentProfile = data; 
+      currentRole = data.role; 
+    } else {
+      const { data: newProfile } = await supabase.from('profiles').insert({ 
+        id: currentUser.id, 
+        name: currentUser.email?.split('@')[0] || 'User', 
+        role: 'team' 
+      }).select().single();
+      currentProfile = newProfile || { id: currentUser.id, name: 'User', role: 'team' };
+      currentRole = 'team';
+    }
+    document.getElementById('sbRn').textContent = currentRole?.toUpperCase() || 'TEAM';
+    document.getElementById('n-woqueue').style.display = currentRole === 'bpc' ? 'flex' : 'none';
+    document.getElementById('n-workorders').style.display = currentRole === 'admin' ? 'flex' : 'none';
+    document.getElementById('n-rates').style.display = currentRole === 'admin' ? 'flex' : 'none';
   }
-  document.getElementById('sbRn').textContent = currentRole?.toUpperCase() || 'TEAM';
-  document.getElementById('n-woqueue').style.display = currentRole === 'bpc' ? 'flex' : 'none';
-  document.getElementById('n-workorders').style.display = currentRole === 'admin' ? 'flex' : 'none';
-  document.getElementById('n-rates').style.display = currentRole === 'admin' ? 'flex' : 'none';
-}
 
-async function initApp() {
-  document.getElementById('loginContainer').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'block';
-  await loadWorkOrders();
-  await loadInbox();
-  nav('dashboard');
-}
-
-async function doLogout() {
-  await supabase.auth.signOut();
-  currentUser = null; currentProfile = null; currentRole = null;
-  document.getElementById('loginContainer').style.display = 'flex';
-  document.getElementById('mainApp').style.display = 'none';
-  document.getElementById('loginEmail').value = '';
-  document.getElementById('loginPassword').value = '';
-}
-
-// ============================================
-// DATA LOADING
-// ============================================
-async function loadWorkOrders() {
-  const { data, error } = await supabase.from('work_orders').select('*').order('created_at', { ascending: false });
-  if (!error) allWorkOrders = data || [];
-  renderWorkOrders();
-}
-
-async function loadRates() {
-  const { data, error } = await supabase.from('rates').select('*').eq('is_highlighted', true);
-  if (!error) allRates = data || [];
-}
-
-async function loadInbox() {
-  if (!currentUser) return;
-  const { data, error } = await supabase.from('notifications').select('*').eq('user_id', currentUser.id).eq('is_read', false).order('created_at', { ascending: false });
-  const count = data?.length || 0;
-  const badge = document.getElementById('ibadge');
-  badge.style.display = count ? 'inline-block' : 'none';
-  badge.textContent = count;
-}
-
-// ============================================
-// RENDER FUNCTIONS
-// ============================================
-function renderWorkOrders() {
-  const container = document.getElementById('contentArea');
-  let html = `
-    <div class="srow" id="statsRow">
-      <div class="sc"><div class="sc-l">Total WOs</div><div class="sc-v">${allWorkOrders.length}</div></div>
-      <div class="sc"><div class="sc-l">In Progress</div><div class="sc-v" style="color:var(--am)">${allWorkOrders.filter(w => w.stage !== 'payment_signed').length}</div></div>
-      <div class="sc"><div class="sc-l">Completed</div><div class="sc-v" style="color:var(--gn)">${allWorkOrders.filter(w => w.stage === 'payment_signed').length}</div></div>
-      <div class="sc"><div class="sc-l">Total Value</div><div class="sc-v" style="font-size:1rem">P 0</div></div>
-    </div>
-    <div class="card"><div class="card-title">Work Orders</div>
-    <div class="table-container"><table><thead><tr><th>WO No.</th><th>Customer</th><th>Location</th><th>Phase</th><th>Stage</th><th>Actions</th></tr></thead><tbody>`;
-  for (const wo of allWorkOrders) {
-    html += `<tr><td style="font-family:monospace">${wo.wo_number}</td><td>${wo.customer_name}</td><td>${wo.location}</td><td>${wo.phase || '46'}</td><td><span class="badge badge-pending">${wo.stage?.replace(/_/g, ' ') || 'issued'}</span></td><td><button class="btn btn-secondary" onclick="selectWorkOrder('${wo.id}')">View</button></td></tr>`;
+  async function initApp() {
+    document.getElementById('loginContainer').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    await loadWorkOrders();
+    await loadInbox();
+    nav('dashboard');
   }
-  html += `</tbody></table></div></div>`;
-  if (currentRole === 'bpc') html += `<button class="btn btn-primary" onclick="showCreateWorkOrderForm()" style="margin-top:1rem">+ Create Work Order</button>`;
-  document.getElementById('contentArea').innerHTML = html;
-}
 
-function showCreateWorkOrderForm() {
-  document.getElementById('contentArea').innerHTML = `
-    <div class="card"><div class="card-title">Create New Work Order</div>
-    <div class="form-group"><label>WO Number *</label><input type="text" id="newWoNumber" placeholder="e.g., 448223"></div>
-    <div class="form-group"><label>Customer Name *</label><input type="text" id="newCustomerName" placeholder="Customer name"></div>
-    <div class="form-group"><label>Location *</label><input type="text" id="newLocation" placeholder="Town, Ward"></div>
-    <div class="form-group"><label>Phase</label><select id="newPhase"><option value="46">Phase 46</option><option value="47">Phase 47</option></select></div>
-    <div class="form-group"><label>Location Factor (%)</label><input type="number" id="newLocationFactor" value="29.25" step="0.01"></div>
-    <button class="btn btn-primary" onclick="createWorkOrder()">Create Work Order</button>
-    <button class="btn btn-secondary" onclick="loadWorkOrders()" style="margin-left:0.5rem">Cancel</button></div>`;
-}
-
-async function createWorkOrder() {
-  const woNumber = document.getElementById('newWoNumber')?.value;
-  const customerName = document.getElementById('newCustomerName')?.value;
-  const location = document.getElementById('newLocation')?.value;
-  const phase = document.getElementById('newPhase')?.value;
-  const locationFactor = parseFloat(document.getElementById('newLocationFactor')?.value) || 29.25;
-  if (!woNumber || !customerName || !location) { alert('Please fill all required fields'); return; }
-  
-  const { error } = await supabase.from('work_orders').insert({
-    wo_number: woNumber, customer_name: customerName, location: location, phase: phase, location_factor: locationFactor, issued_by: currentUser.id, stage: 'issued'
-  });
-  if (error) { alert('Error: ' + error.message); return; }
-  alert('Work Order created!'); await loadWorkOrders(); await loadInbox(); nav('dashboard');
-}
-
-function selectWorkOrder(id) {
-  const wo = allWorkOrders.find(w => w.id === id);
-  if (!wo) return;
-  document.getElementById('contentArea').innerHTML = `
-    <div class="card"><div class="card-title">WO ${wo.wo_number} - ${wo.customer_name}</div>
-    <div class="form-group"><label>Location:</label> ${wo.location}</div>
-    <div class="form-group"><label>Phase:</label> ${wo.phase || '46'}</div>
-    <div class="form-group"><label>Stage:</label> <span class="badge badge-pending">${wo.stage?.replace(/_/g, ' ') || 'issued'}</span></div>
-    <div class="form-group"><label>Location Factor:</label> ${wo.location_factor || 29.25}%</div>
-    <button class="btn btn-secondary" onclick="loadWorkOrders()">← Back to List</button>
-    ${currentRole === 'admin' && wo.stage === 'issued' ? `<button class="btn btn-primary" onclick="createVO1('${wo.id}')" style="margin-left:0.5rem">📝 Create VO1</button>` : ''}
-    ${currentRole === 'admin' && wo.stage === 'vo2_pending' ? `<button class="btn btn-primary" onclick="createVO2('${wo.id}')" style="margin-left:0.5rem">📝 Create VO2</button>` : ''}
-    ${currentRole === 'linesman' && wo.stage === 'vo1_created' ? `<button class="btn btn-primary" onclick="submitFieldReport('${wo.id}')" style="margin-left:0.5rem">📏 Submit Field Report</button>` : ''}
-    ${currentRole === 'gis' && wo.stage === 'vo2_pending' ? `<button class="btn btn-primary" onclick="submitGISReport('${wo.id}')" style="margin-left:0.5rem">🗺️ Submit GIS Report</button>` : ''}
-    ${currentRole === 'admin' && wo.stage === 'gis' ? `<button class="btn btn-primary" onclick="issueWorksInstruction('${wo.id}')" style="margin-left:0.5rem">📋 Issue Works Instruction</button>` : ''}
-    ${currentRole === 'finance' && wo.stage === 'annexure' ? `<button class="btn btn-primary" onclick="createPaymentCert('${wo.id}')" style="margin-left:0.5rem">💰 Generate Payment Certificate</button>` : ''}
-    `;
-}
-
-async function createVO1(woId) { alert('VO1 created. Linesman dispatched.'); await supabase.from('work_orders').update({ stage: 'vo1_created' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
-async function createVO2(woId) { alert('VO2 created.'); await supabase.from('work_orders').update({ stage: 'vo2_bpc' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
-async function submitFieldReport(woId) { alert('Field measurements submitted.'); await supabase.from('work_orders').update({ stage: 'vo2_pending' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
-async function submitGISReport(woId) { alert('GIS report submitted.'); await supabase.from('work_orders').update({ stage: 'gis' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
-async function issueWorksInstruction(woId) { alert('Works Instruction issued.'); await supabase.from('work_orders').update({ stage: 'wi_issued' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
-async function createPaymentCert(woId) { alert('Payment Certificate generated.'); await supabase.from('work_orders').update({ stage: 'payment_ready' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
-
-// ============================================
-// NAVIGATION
-// ============================================
-function nav(screen) {
-  document.querySelectorAll('.ni').forEach(n => n.classList.remove('act'));
-  const target = document.getElementById(`n-${screen}`);
-  if (target) target.classList.add('act');
-  const titles = { dashboard: 'Dashboard', inbox: 'Inbox', woqueue: 'Work Order Queue', workorders: 'All Work Orders', rates: 'Rates Management' };
-  document.getElementById('tbt').textContent = titles[screen] || screen;
-  
-  if (screen === 'dashboard') loadWorkOrders();
-  else if (screen === 'inbox') renderInbox();
-  else if (screen === 'woqueue') renderWOQueue();
-  else if (screen === 'workorders') renderAllWO();
-  else if (screen === 'rates') renderRates();
-}
-
-function renderInbox() {
-  document.getElementById('contentArea').innerHTML = `<div class="card"><div class="card-title">📬 Inbox</div><div id="inboxList" class="loading">Loading...</div></div>`;
-  loadInboxItems();
-}
-
-async function loadInboxItems() {
-  if (!currentUser) return;
-  const { data, error } = await supabase.from('notifications').select('*').eq('user_id', currentUser.id).eq('is_read', false).order('created_at', { ascending: false });
-  if (!data || data.length === 0) { document.getElementById('inboxList').innerHTML = '<div style="text-align:center;padding:2rem;color:var(--tx3)">No new notifications</div>'; return; }
-  let html = '';
-  for (const n of data) {
-    html += `<div class="inbox-item" onclick="markRead('${n.id}')"><div class="inbox-title">📌 ${n.type?.replace(/_/g, ' ') || 'Notification'}</div><div class="inbox-desc">${n.message}</div><span class="inbox-badge badge-pending">New</span></div>`;
+  async function doLogout() {
+    await supabase.auth.signOut();
+    currentUser = null; currentProfile = null; currentRole = null;
+    document.getElementById('loginContainer').style.display = 'flex';
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('loginEmail').value = '';
+    document.getElementById('loginPassword').value = '';
   }
-  document.getElementById('inboxList').innerHTML = html;
-}
 
-async function markRead(id) { await supabase.from('notifications').update({ is_read: true }).eq('id', id); renderInbox(); await loadInbox(); }
-
-function renderWOQueue() {
-  document.getElementById('contentArea').innerHTML = `<div class="card"><div class="card-title">Work Order Queue</div><div class="loading">Loading work orders...</div></div>`;
-  loadWOQueue();
-}
-
-async function loadWOQueue() {
-  const { data, error } = await supabase.from('work_orders').select('*').eq('stage', 'issued').limit(10);
-  if (!data || data.length === 0) { document.getElementById('contentArea').innerHTML = '<div class="card"><div class="card-title">Work Order Queue</div><div class="loading" style="padding:2rem;text-align:center">No pending work orders to issue</div></div>'; return; }
-  let html = `<div class="card"><div class="card-title">Work Order Queue</div><div class="table-container"><table><thead><tr><th>WO No.</th><th>Customer</th><th>Location</th><th>Phase</th><th>Actions</th></tr></thead><tbody>`;
-  for (const wo of data) {
-    html += `<tr><td style="font-family:monospace">${wo.wo_number}</td><td>${wo.customer_name}</td><td>${wo.location}</td><td>${wo.phase || '46'}</td><td><button class="btn btn-primary" onclick="issueWorkOrder('${wo.id}')">Issue to Trends</button></td></tr>`;
+  // ============================================
+  // DATA LOADING
+  // ============================================
+  async function loadWorkOrders() {
+    const { data, error } = await supabase.from('work_orders').select('*').order('created_at', { ascending: false });
+    if (!error) allWorkOrders = data || [];
+    renderWorkOrders();
   }
-  html += `</tbody></table></div></div>`;
-  document.getElementById('contentArea').innerHTML = html;
-}
 
-async function issueWorkOrder(id) {
-  await supabase.from('work_orders').update({ stage: 'issued' }).eq('id', id);
-  await supabase.from('notifications').insert({ user_id: currentUser.id, work_order_id: id, type: 'new_wo', message: 'New work order received', is_read: false });
-  alert('Work Order issued to Trends Engineering');
-  renderWOQueue(); await loadInbox();
-}
-
-function renderAllWO() {
-  let html = `<div class="card"><div class="card-title">All Work Orders</div><div class="table-container"></table><thead><tr><th>WO No.</th><th>Customer</th><th>Location</th><th>Phase</th><th>Stage</th><th>Status</th></tr></thead><tbody>`;
-  for (const wo of allWorkOrders) {
-    html += `<tr><td style="font-family:monospace">${wo.wo_number}</td><td>${wo.customer_name}</td><td>${wo.location}</td><td>${wo.phase || '46'}</td><td>${wo.stage?.replace(/_/g, ' ') || 'issued'}</td><td><span class="badge ${wo.stage === 'payment_signed' ? 'badge-paid' : 'badge-pending'}">${wo.stage === 'payment_signed' ? '✓ Paid' : 'Active'}</span></td></tr>`;
+  async function loadRates() {
+    const { data, error } = await supabase.from('rates').select('*').eq('is_highlighted', true);
+    if (!error) allRates = data || [];
   }
-  html += `</tbody></table></div></div>`;
-  document.getElementById('contentArea').innerHTML = html;
-}
 
-function renderRates() {
-  let html = `<div class="card"><div class="card-title">💰 BPC Rates Sheet</div><div class="table-container"><table><thead><tr><th>Description</th><th>Unit</th><th>Rate (BWP)</th><th>Category</th></tr></thead><tbody>`;
-  for (const rate of allRates) {
-    html += `<tr><td style="max-width:300px">${rate.description}</td><td>${rate.unit}</td><td style="font-family:monospace">P ${rate.rate.toLocaleString('en-BW', { minimumFractionDigits: 2 })}</div></td><td><span class="badge badge-pending">${rate.category}</span></td></tr>`;
+  async function loadInbox() {
+    if (!currentUser) return;
+    const { data, error } = await supabase.from('notifications').select('*').eq('user_id', currentUser.id).eq('is_read', false).order('created_at', { ascending: false });
+    const count = data?.length || 0;
+    const badge = document.getElementById('ibadge');
+    badge.style.display = count ? 'inline-block' : 'none';
+    badge.textContent = count;
   }
-  html += `</tbody></table></div><div class="footnote" style="margin-top:1rem; font-size:0.7rem; color:var(--tx3); text-align:center">✅ Only highlighted/approved rates are shown.</div></div>`;
-  document.getElementById('contentArea').innerHTML = html;
-}
 
-// ============================================
-// SIGNATURE FUNCTIONS
-// ============================================
-function openSignatureModal(documentId, documentName) { pendingSignature = documentId; document.getElementById('sigDocName').textContent = documentName; document.getElementById('sigModal').classList.add('open'); }
-function closeSigModal() { document.getElementById('sigModal').classList.remove('open'); pendingSignature = null; }
-async function confirmSignature() {
-  const name = document.getElementById('sigName').value; const designation = document.getElementById('sigDesignation').value;
-  if (!name) { alert('Please enter your name'); return; }
-  await supabase.from('signatures').insert({ document_id: pendingSignature, user_id: currentUser.id, role_at_signing: currentRole, signature_field: 'approval', ip_address: 'client-side' });
-  await supabase.from('activity_log').insert({ user_id: currentUser.id, action: `Document signed by ${name} (${designation})` });
-  closeSigModal(); alert('Document signed successfully');
-}
+  // ============================================
+  // RENDER FUNCTIONS
+  // ============================================
+  function renderWorkOrders() {
+    const container = document.getElementById('contentArea');
+    let html = `
+      <div class="srow">
+        <div class="sc"><div class="sc-l">Total WOs</div><div class="sc-v">${allWorkOrders.length}</div></div>
+        <div class="sc"><div class="sc-l">In Progress</div><div class="sc-v" style="color:var(--am)">${allWorkOrders.filter(w => w.stage !== 'payment_signed').length}</div></div>
+        <div class="sc"><div class="sc-l">Completed</div><div class="sc-v" style="color:var(--gn)">${allWorkOrders.filter(w => w.stage === 'payment_signed').length}</div></div>
+        <div class="sc"><div class="sc-l">Total Value</div><div class="sc-v" style="font-size:1rem">P 0</div></div>
+      </div>
+      <div class="card"><div class="card-title">Work Orders</div>
+      <div class="table-container"><table><thead><tr><th>WO No.</th><th>Customer</th><th>Location</th><th>Phase</th><th>Stage</th><th>Actions</th></tr></thead><tbody>`;
+    for (const wo of allWorkOrders) {
+      html += `<tr><td style="font-family:monospace">${wo.wo_number}</div><td>${wo.customer_name}</div><td>${wo.location}</div><td>${wo.phase || '46'}</div><td><span class="badge badge-pending">${wo.stage?.replace(/_/g, ' ') || 'issued'}</span></div><td><button class="btn btn-secondary" onclick="selectWorkOrder('${wo.id}')">View</button></div></tr>`;
+    }
+    html += `</tbody></table></div></div>`;
+    if (currentRole === 'bpc') html += `<button class="btn btn-primary" onclick="showCreateWorkOrderForm()" style="margin-top:1rem">+ Create Work Order</button>`;
+    document.getElementById('contentArea').innerHTML = html;
+  }
 
-// Expose global functions
-window.handleLogin = handleLogin;
-window.doLogout = doLogout;
-window.nav = nav;
-window.loadWorkOrders = loadWorkOrders;
-window.selectWorkOrder = selectWorkOrder;
-window.showCreateWorkOrderForm = showCreateWorkOrderForm;
-window.createWorkOrder = createWorkOrder;
-window.createVO1 = createVO1;
-window.createVO2 = createVO2;
-window.submitFieldReport = submitFieldReport;
-window.submitGISReport = submitGISReport;
-window.issueWorksInstruction = issueWorksInstruction;
-window.createPaymentCert = createPaymentCert;
-window.issueWorkOrder = issueWorkOrder;
-window.markRead = markRead;
-window.openSignatureModal = openSignatureModal;
-window.closeSigModal = closeSigModal;
-window.confirmSignature = confirmSignature;
+  function showCreateWorkOrderForm() {
+    document.getElementById('contentArea').innerHTML = `
+      <div class="card"><div class="card-title">Create New Work Order</div>
+      <div class="form-group"><label>WO Number *</label><input type="text" id="newWoNumber" placeholder="e.g., 448223"></div>
+      <div class="form-group"><label>Customer Name *</label><input type="text" id="newCustomerName" placeholder="Customer name"></div>
+      <div class="form-group"><label>Location *</label><input type="text" id="newLocation" placeholder="Town, Ward"></div>
+      <div class="form-group"><label>Phase</label><select id="newPhase"><option value="46">Phase 46</option><option value="47">Phase 47</option></select></div>
+      <div class="form-group"><label>Location Factor (%)</label><input type="number" id="newLocationFactor" value="29.25" step="0.01"></div>
+      <button class="btn btn-primary" onclick="createWorkOrder()">Create Work Order</button>
+      <button class="btn btn-secondary" onclick="loadWorkOrders()" style="margin-left:0.5rem">Cancel</button></div>`;
+  }
 
-console.log('System ready');
+  async function createWorkOrder() {
+    const woNumber = document.getElementById('newWoNumber')?.value;
+    const customerName = document.getElementById('newCustomerName')?.value;
+    const location = document.getElementById('newLocation')?.value;
+    const phase = document.getElementById('newPhase')?.value;
+    const locationFactor = parseFloat(document.getElementById('newLocationFactor')?.value) || 29.25;
+    if (!woNumber || !customerName || !location) { alert('Please fill all required fields'); return; }
+    
+    const { error } = await supabase.from('work_orders').insert({
+      wo_number: woNumber, customer_name: customerName, location: location, phase: phase, location_factor: locationFactor, issued_by: currentUser.id, stage: 'issued'
+    });
+    if (error) { alert('Error: ' + error.message); return; }
+    alert('Work Order created!'); await loadWorkOrders(); await loadInbox(); nav('dashboard');
+  }
+
+  function selectWorkOrder(id) {
+    const wo = allWorkOrders.find(w => w.id === id);
+    if (!wo) return;
+    document.getElementById('contentArea').innerHTML = `
+      <div class="card"><div class="card-title">WO ${wo.wo_number} - ${wo.customer_name}</div>
+      <div class="form-group"><label>Location:</label> ${wo.location}</div>
+      <div class="form-group"><label>Phase:</label> ${wo.phase || '46'}</div>
+      <div class="form-group"><label>Stage:</label> <span class="badge badge-pending">${wo.stage?.replace(/_/g, ' ') || 'issued'}</span></div>
+      <div class="form-group"><label>Location Factor:</label> ${wo.location_factor || 29.25}%</div>
+      <button class="btn btn-secondary" onclick="loadWorkOrders()">← Back to List</button>
+      ${currentRole === 'admin' && wo.stage === 'issued' ? `<button class="btn btn-primary" onclick="createVO1('${wo.id}')" style="margin-left:0.5rem">📝 Create VO1</button>` : ''}
+      ${currentRole === 'admin' && wo.stage === 'vo2_pending' ? `<button class="btn btn-primary" onclick="createVO2('${wo.id}')" style="margin-left:0.5rem">📝 Create VO2</button>` : ''}
+      ${currentRole === 'linesman' && wo.stage === 'vo1_created' ? `<button class="btn btn-primary" onclick="submitFieldReport('${wo.id}')" style="margin-left:0.5rem">📏 Submit Field Report</button>` : ''}
+      ${currentRole === 'gis' && wo.stage === 'vo2_pending' ? `<button class="btn btn-primary" onclick="submitGISReport('${wo.id}')" style="margin-left:0.5rem">🗺️ Submit GIS Report</button>` : ''}
+      ${currentRole === 'admin' && wo.stage === 'gis' ? `<button class="btn btn-primary" onclick="issueWorksInstruction('${wo.id}')" style="margin-left:0.5rem">📋 Issue Works Instruction</button>` : ''}
+      ${currentRole === 'finance' && wo.stage === 'annexure' ? `<button class="btn btn-primary" onclick="createPaymentCert('${wo.id}')" style="margin-left:0.5rem">💰 Generate Payment Certificate</button>` : ''}
+      `;
+  }
+
+  async function createVO1(woId) { alert('VO1 created. Linesman dispatched.'); await supabase.from('work_orders').update({ stage: 'vo1_created' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
+  async function createVO2(woId) { alert('VO2 created.'); await supabase.from('work_orders').update({ stage: 'vo2_bpc' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
+  async function submitFieldReport(woId) { alert('Field measurements submitted.'); await supabase.from('work_orders').update({ stage: 'vo2_pending' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
+  async function submitGISReport(woId) { alert('GIS report submitted.'); await supabase.from('work_orders').update({ stage: 'gis' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
+  async function issueWorksInstruction(woId) { alert('Works Instruction issued.'); await supabase.from('work_orders').update({ stage: 'wi_issued' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
+  async function createPaymentCert(woId) { alert('Payment Certificate generated.'); await supabase.from('work_orders').update({ stage: 'payment_ready' }).eq('id', woId); await loadWorkOrders(); await loadInbox(); }
+
+  // ============================================
+  // NAVIGATION
+  // ============================================
+  function nav(screen) {
+    document.querySelectorAll('.ni').forEach(n => n.classList.remove('act'));
+    const target = document.getElementById(`n-${screen}`);
+    if (target) target.classList.add('act');
+    const titles = { dashboard: 'Dashboard', inbox: 'Inbox', woqueue: 'Work Order Queue', workorders: 'All Work Orders', rates: 'Rates Management' };
+    document.getElementById('tbt').textContent = titles[screen] || screen;
+    
+    if (screen === 'dashboard') loadWorkOrders();
+    else if (screen === 'inbox') renderInbox();
+    else if (screen === 'woqueue') renderWOQueue();
+    else if (screen === 'workorders') renderAllWO();
+    else if (screen === 'rates') renderRates();
+  }
+
+  function renderInbox() {
+    document.getElementById('contentArea').innerHTML = `<div class="card"><div class="card-title">📬 Inbox</div><div id="inboxList" class="loading">Loading...</div></div>`;
+    loadInboxItems();
+  }
+
+  async function loadInboxItems() {
+    if (!currentUser) return;
+    const { data, error } = await supabase.from('notifications').select('*').eq('user_id', currentUser.id).eq('is_read', false).order('created_at', { ascending: false });
+    if (!data || data.length === 0) { document.getElementById('inboxList').innerHTML = '<div style="text-align:center;padding:2rem;color:var(--tx3)">No new notifications</div>'; return; }
+    let html = '';
+    for (const n of data) {
+      html += `<div class="inbox-item" onclick="markRead('${n.id}')"><div class="inbox-title">📌 ${n.type?.replace(/_/g, ' ') || 'Notification'}</div><div class="inbox-desc">${n.message}</div><span class="inbox-badge badge-pending">New</span></div>`;
+    }
+    document.getElementById('inboxList').innerHTML = html;
+  }
+
+  async function markRead(id) { await supabase.from('notifications').update({ is_read: true }).eq('id', id); renderInbox(); await loadInbox(); }
+
+  function renderWOQueue() {
+    document.getElementById('contentArea').innerHTML = `<div class="card"><div class="card-title">Work Order Queue</div><div class="loading">Loading work orders...</div></div>`;
+    loadWOQueue();
+  }
+
+  async function loadWOQueue() {
+    const { data, error } = await supabase.from('work_orders').select('*').eq('stage', 'issued').limit(10);
+    if (!data || data.length === 0) { document.getElementById('contentArea').innerHTML = '<div class="card"><div class="card-title">Work Order Queue</div><div class="loading" style="padding:2rem;text-align:center">No pending work orders to issue</div></div>'; return; }
+    let html = `<div class="card"><div class="card-title">Work Order Queue</div><div class="table-container"><table><thead><tr><th>WO No.</th><th>Customer</th><th>Location</th><th>Phase</th><th>Actions</th></tr></thead><tbody>`;
+    for (const wo of data) {
+      html += `<tr><td style="font-family:monospace">${wo.wo_number}</div><td>${wo.customer_name}</div><td>${wo.location}</div><td>${wo.phase || '46'}</div><td><button class="btn btn-primary" onclick="issueWorkOrder('${wo.id}')">Issue to Trends</button></div></tr>`;
+    }
+    html += `</tbody></table></div></div>`;
+    document.getElementById('contentArea').innerHTML = html;
+  }
+
+  async function issueWorkOrder(id) {
+    await supabase.from('work_orders').update({ stage: 'issued' }).eq('id', id);
+    await supabase.from('notifications').insert({ user_id: currentUser.id, work_order_id: id, type: 'new_wo', message: 'New work order received', is_read: false });
+    alert('Work Order issued to Trends Engineering');
+    renderWOQueue(); await loadInbox();
+  }
+
+  function renderAllWO() {
+    let html = `<div class="card"><div class="card-title">All Work Orders</div><div class="table-container"></table><thead><tr><th>WO No.</th><th>Customer</th><th>Location</th><th>Phase</th><th>Stage</th><th>Status</th></tr></thead><tbody>`;
+    for (const wo of allWorkOrders) {
+      html += `<tr><td style="font-family:monospace">${wo.wo_number}</div><td>${wo.customer_name}</div><td>${wo.location}</div><td>${wo.phase || '46'}</div><td>${wo.stage?.replace(/_/g, ' ') || 'issued'}</div><td><span class="badge ${wo.stage === 'payment_signed' ? 'badge-paid' : 'badge-pending'}">${wo.stage === 'payment_signed' ? '✓ Paid' : 'Active'}</span></div></tr>`;
+    }
+    html += `</tbody></table></div></div>`;
+    document.getElementById('contentArea').innerHTML = html;
+  }
+
+  function renderRates() {
+    let html = `<div class="card"><div class="card-title">💰 BPC Rates Sheet</div><div class="table-container"><tr><thead><tr><th>Description</th><th>Unit</th><th>Rate (BWP)</th><th>Category</th></tr></thead><tbody>`;
+    for (const rate of allRates) {
+      html += `<tr><td style="max-width:300px">${rate.description}</div><td>${rate.unit}</div><td>P ${rate.rate.toLocaleString('en-BW', { minimumFractionDigits: 2 })}</div><td><span class="badge badge-pending">${rate.category}</span></div></tr>`;
+    }
+    html += `</tbody></table></div><div class="footnote" style="margin-top:1rem; font-size:0.7rem; color:var(--tx3); text-align:center">✅ Only highlighted/approved rates are shown.</div></div>`;
+    document.getElementById('contentArea').innerHTML = html;
+  }
+
+  // ============================================
+  // SIGNATURE FUNCTIONS
+  // ============================================
+  function openSignatureModal(documentId, documentName) { pendingSignature = documentId; document.getElementById('sigDocName').textContent = documentName; document.getElementById('sigModal').classList.add('open'); }
+  function closeSigModal() { document.getElementById('sigModal').classList.remove('open'); pendingSignature = null; }
+  async function confirmSignature() {
+    const name = document.getElementById('sigName').value; const designation = document.getElementById('sigDesignation').value;
+    if (!name) { alert('Please enter your name'); return; }
+    await supabase.from('signatures').insert({ document_id: pendingSignature, user_id: currentUser.id, role_at_signing: currentRole, signature_field: 'approval', ip_address: 'client-side' });
+    await supabase.from('activity_log').insert({ user_id: currentUser.id, action: `Document signed by ${name} (${designation})` });
+    closeSigModal(); alert('Document signed successfully');
+  }
+
+  // Expose global functions
+  window.nav = nav;
+  window.loadWorkOrders = loadWorkOrders;
+  window.selectWorkOrder = selectWorkOrder;
+  window.showCreateWorkOrderForm = showCreateWorkOrderForm;
+  window.createWorkOrder = createWorkOrder;
+  window.createVO1 = createVO1;
+  window.createVO2 = createVO2;
+  window.submitFieldReport = submitFieldReport;
+  window.submitGISReport = submitGISReport;
+  window.issueWorksInstruction = issueWorksInstruction;
+  window.createPaymentCert = createPaymentCert;
+  window.issueWorkOrder = issueWorkOrder;
+  window.markRead = markRead;
+  window.openSignatureModal = openSignatureModal;
+  window.closeSigModal = closeSigModal;
+  window.confirmSignature = confirmSignature;
+  window.doLogout = doLogout;
+
+  console.log('System ready');
+})();
 </script>
 </body>
 </html>
